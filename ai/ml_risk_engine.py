@@ -104,7 +104,7 @@ class MLRiskEngine:
             total=adjusted_predicted,
             level=level,
             threshold=RISK_THRESHOLD,
-            rotation_required=adjusted_predicted >= RISK_THRESHOLD * 0.5,
+            rotation_required=adjusted_predicted > RISK_THRESHOLD,
             explanations=explanations
         )
         return breakdown

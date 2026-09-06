@@ -138,7 +138,7 @@ class RuleBasedRiskEngine:
             total=total,
             level=level,
             threshold=RISK_THRESHOLD,
-            rotation_required=total >= RISK_THRESHOLD * 0.5,
+            rotation_required=total > RISK_THRESHOLD,
             explanations=explanations
         )
         return breakdown
