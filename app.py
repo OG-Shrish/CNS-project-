@@ -20,15 +20,38 @@ from ai.risk_engine import analyze, engine_status, get_active_engine
 from logs.audit import log_event
 from rotation import rotate_key, analyze_risk
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
 app = FastAPI(title="Adaptive AI-Based Risk-Aware Key Rotation Framework")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+def check_all_files_background():
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        from models.models import FileRecord
+        from rotation import analyze_risk, rotate_key
+        files = db.query(FileRecord).all()
+        for file_record in files:
+            # Re-evaluate risk
+            breakdown = analyze_risk(db, file_record)
+            # If Medium, High, or Critical, rotate automatically
+            if breakdown.rotation_required:
+                rotate_key(db, file_record, forced=False)
+    except Exception as e:
+        print(f"Background monitoring error: {e}")
+    finally:
+        db.close()
 
 @app.on_event("startup")
 def on_startup():
     init_db()
+    # Start the background risk monitoring job
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_all_files_background, 'interval', minutes=1)
+    scheduler.start()
 
 
 # --------------------------------------------------------------------------
@@ -379,6 +402,49 @@ def download_file(request: Request, file_id: int, db: Session = Depends(get_db))
         headers={"Content-Disposition": f'attachment; filename="{file_record.original_filename}"'},
     )
 
+
+@app.post("/file/{file_id}/delete")
+def delete_file(request: Request, file_id: int, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    file_record = (
+        db.query(FileRecord)
+        .filter(FileRecord.id == file_id, FileRecord.owner_id == user.id)
+        .first()
+    )
+    if not file_record:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    # 1. Delete encrypted file from disk
+    from config import ENCRYPTED_DIR, KEYS_DIR
+    encrypted_path = os.path.join(ENCRYPTED_DIR, file_record.stored_filename)
+    if os.path.exists(encrypted_path):
+        os.remove(encrypted_path)
+        
+    # 2. Delete all associated key files from disk
+    for key_record in file_record.keys:
+        key_path = os.path.join(KEYS_DIR, key_record.key_filename)
+        if os.path.exists(key_path):
+            os.remove(key_path)
+
+    original_name = file_record.original_filename
+
+    # 3. Delete from database
+    db.delete(file_record)
+    db.commit()
+
+    # 4. Log the deletion as a global action
+    log_event(
+        db,
+        file_id=None,
+        user_id=user.id,
+        action="DELETE",
+        details=f"Deleted file '{original_name}' permanently",
+    )
+
+    return RedirectResponse("/dashboard", status_code=303)
 
 if __name__ == "__main__":
     import uvicorn

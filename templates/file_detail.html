@@ -4,8 +4,11 @@
 
 <div class="page-header">
   <h1>{{ file.original_filename }}</h1>
-  <div class="header-actions">
+  <div class="header-actions" style="display: flex; gap: 0.5rem;">
     <a href="/file/{{ file.id }}/download" class="btn btn-secondary">Download (decrypt)</a>
+    <form method="post" action="/file/{{ file.id }}/delete" style="margin: 0;" onsubmit="return confirm('Delete this file and all keys permanently?');">
+      <button type="submit" class="btn btn-outline" style="border-color: var(--red); color: var(--red);">Delete File</button>
+    </form>
   </div>
 </div>
 
@@ -38,7 +41,9 @@
     </h2>
     <div class="risk-score-display">
       <span class="risk-score-number">{{ "%.0f"|format(breakdown.total) }}</span><span class="risk-score-max">/100</span>
-      {% if breakdown.level == "HIGH" %}
+      {% if breakdown.level == "CRITICAL" %}
+        <span class="pill pill-high glow-high">CRITICAL</span>
+      {% elif breakdown.level == "HIGH" %}
         <span class="pill pill-high">HIGH</span>
       {% elif breakdown.level == "MEDIUM" %}
         <span class="pill pill-medium">MEDIUM</span>

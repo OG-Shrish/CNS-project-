@@ -103,8 +103,8 @@ class MLRiskEngine:
             time_risk=time_risk,
             total=adjusted_predicted,
             level=level,
-            threshold=RISK_THRESHOLD,
-            rotation_required=adjusted_predicted > RISK_THRESHOLD,
+            threshold=30,
+            rotation_required=adjusted_predicted > 30,
             explanations=explanations
         )
         return breakdown

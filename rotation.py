@@ -111,6 +111,11 @@ def rotate_key(db: Session, file_record: FileRecord, forced: bool = False) -> di
 
     file_record.active_key_version = new_version
     file_record.file_size = ciphertext_size
+    file_record.download_count = 0  # Reset threat counter after mitigating
+    if file_record.owner:
+        file_record.owner.failed_login_attempts = 0
+        db.add(file_record.owner)
+        
     db.add(file_record)
     db.commit()
     db.refresh(new_key_record)

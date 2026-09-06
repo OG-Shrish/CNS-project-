@@ -9,7 +9,7 @@ from database import Base
 
 
 def now():
-    return datetime.datetime.utcnow()
+    return datetime.datetime.now()
 
 
 class User(Base):

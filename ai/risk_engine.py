@@ -65,11 +65,13 @@ def _file_type_bucket(file_type: str) -> str:
 
 
 def _level_for(score: float) -> str:
-    if score >= RISK_THRESHOLD:
-        return "HIGH"
-    if score >= RISK_THRESHOLD * 0.5:
+    if score <= 30:
+        return "LOW"
+    elif score <= 60:
         return "MEDIUM"
-    return "LOW"
+    elif score <= 80:
+        return "HIGH"
+    return "CRITICAL"
 
 
 class RuleBasedRiskEngine:
@@ -78,7 +80,7 @@ class RuleBasedRiskEngine:
     name = "rule-based-v1"
 
     def score(self, file_record, key_record) -> RiskBreakdown:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now()
         w = RISK_WEIGHTS
         explanations = []
 
@@ -137,8 +139,8 @@ class RuleBasedRiskEngine:
             time_risk=time_risk,
             total=total,
             level=level,
-            threshold=RISK_THRESHOLD,
-            rotation_required=total > RISK_THRESHOLD,
+            threshold=30,  # Now fixed to 30 based on new tiers
+            rotation_required=total > 30,
             explanations=explanations
         )
         return breakdown

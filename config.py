@@ -24,18 +24,18 @@ NONCE_SIZE = 12      # 96-bit nonce for ChaCha20-Poly1305
 RISK_THRESHOLD = 30  # score above this triggers rotation
 
 RISK_WEIGHTS = {
-    "encryption_risk": 10,   # baseline risk simply for holding an encrypted secret
+    "encryption_risk": 0,    # Reduced to 0 so fresh files start at Low risk
     "file_type_risk": {
-        "high": 20,   # e.g. .exe, .zip, .sql, .env, .pem
-        "medium": 12,  # e.g. .docx, .xlsx, .pdf
-        "low": 5,     # e.g. .txt, .csv, .png
+        "high": 10,   # e.g. .exe, .zip, .sql, .env, .pem
+        "medium": 5,  # e.g. .docx, .xlsx, .pdf
+        "low": 0,     # e.g. .txt, .csv, .png
     },
-    "age_risk_per_day": 1,       # file age contribution, capped
+    "age_risk_per_day": 1,       
     "age_risk_cap": 25,
-    "key_age_risk_per_day": 1.5,  # key age contributes more (older key = weaker)
+    "key_age_risk_per_day": 1.5,  
     "key_age_risk_cap": 30,
-    "access_risk_per_download": 3,  # more downloads = more exposure
-    "access_risk_cap": 15,
+    "access_risk_per_download": 5,  # Increased from 3 to 5 to trigger risk faster
+    "access_risk_cap": 25,
 }
 
 # session secret (demo only — in production load from env/secret manager)
