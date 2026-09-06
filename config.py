@@ -24,11 +24,11 @@ NONCE_SIZE = 12      # 96-bit nonce for ChaCha20-Poly1305
 RISK_THRESHOLD = 30  # score above this triggers rotation
 
 RISK_WEIGHTS = {
-    "encryption_risk": 0,    # Reduced to 0 so fresh files start at Low risk
+    "encryption_risk": 10,   
     "file_type_risk": {
-        "high": 10,   # e.g. .exe, .zip, .sql, .env, .pem
-        "medium": 5,  # e.g. .docx, .xlsx, .pdf
-        "low": 0,     # e.g. .txt, .csv, .png
+        "high": 15,   # e.g. .exe, .zip, .sql, .env, .pem
+        "medium": 10,  # e.g. .docx, .xlsx, .pdf
+        "low": 5,     # e.g. .txt, .csv, .png
     },
     "age_risk_per_day": 1,       
     "age_risk_cap": 25,
