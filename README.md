@@ -1,214 +1,179 @@
 # Adaptive AI-Based Risk-Aware Key Rotation Framework
 
-A secure file-storage web app where every uploaded file is encrypted with a
-**file-specific ChaCha20-Poly1305 key**, and — instead of rotating keys on a
-fixed schedule — a **risk engine** scores each file and triggers **key
-rotation** automatically once risk crosses a threshold. Every step
-(encryption, risk analysis, rotation, re-encryption) is logged to an
-**audit trail** and shown on the dashboard.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![Encryption](https://img.shields.io/badge/Cipher-ChaCha20--Poly1305-blueviolet.svg)](https://cryptography.io/)
+[![ML Model](https://img.shields.io/badge/Model-Random%20Forest%20Regressor-brightgreen.svg)](https://scikit-learn.org/)
 
-## One line summary
+An enterprise-grade, intelligent cryptographic file storage framework. Instead of rotating encryption keys on arbitrary calendar schedules (e.g., every 30–90 days), the system continuously computes multi-factor exposure risk using an integrated **Random Forest Machine Learning model** and orchestrates **automatic key rotation and file re-encryption** the moment risk exceeds defined security thresholds.
 
-> We are developing a risk-aware secure file storage framework where each
-> file is encrypted using a file-specific ChaCha20-Poly1305 key, and instead
-> of relying only on fixed-time rotation, the system analyses the file's
-> security risk and triggers key rotation when the risk crosses a defined
-> threshold, while maintaining key versions, re-encryption, and an auditable
-> history.
+---
 
-## Quick start
+## Key Highlights
 
+- **Adaptive Key Rotation**: Keys rotate when threat conditions demand it, not on rigid fixed clocks.
+- **Modern Authenticated Encryption**: Implements **ChaCha20-Poly1305 AEAD** (256-bit key, 96-bit nonce) offering both integrity and confidentiality.
+- **Real Random Forest ML Engine**: Evaluates file metadata, access frequency, credential anomalies, and key aging (trained on 6,000 samples; MAE ≈ 3.3, R² ≈ 0.94).
+- **Autonomous Background Monitoring**: Built-in APScheduler constantly surveys assets and executes rotations without manual intervention or browser dependencies.
+- **State-Machine Rotation Control**: Enforces single-rotation transitions ($v_1 \rightarrow v_2$) for sustained threats, avoiding cascading re-encryption loops.
+- **Active Post-Rotation Mitigation**: Automatically recalculates risk with fresh active keys, visibly reducing the risk score (e.g., from 43 to 27 / LOW) upon mitigation.
+- **Zero-Exposure Cryptographic Hygiene**: Secret key bytes and hex strings are never displayed on the UI or written to audit logs; keys are tracked strictly via truncated SHA-256 fingerprints.
+
+---
+
+## Quick Start
+
+### 1. Clone & Setup
 ```bash
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+git clone https://github.com/ANISHASHARMA0307/adaptive-ai-key-rotation.git
+cd adaptive-ai-key-rotation
 
-uvicorn app:app --reload
+# Create virtual environment (optional but recommended)
+python -m venv venv
+venv\Scripts\activate      # Linux/macOS: source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt -r requirements-ml.txt
 ```
 
-Open http://127.0.0.1:8000 — register an account, upload a file, and you'll
-land on the file's detail page showing encryption details, live risk
-analysis, and rotation controls.
-
-`requirements.txt` installs only the core app (no ML libraries) — the app
-runs fully end-to-end on this alone, using the rule-based risk engine.
-
-### Enabling the ML (Random Forest) risk engine
-
-ML dependencies (`numpy`, `scikit-learn`, `joblib`) are kept in a **separate,
-optional** file, `requirements-ml.txt`, because `numpy`/`scikit-learn` wheel
-support for brand-new Python releases (e.g. 3.14) sometimes lags behind —
-installing them can fail with a "metadata-generation-failed" / compiler
-error on the very newest Python versions. If that happens to you, either:
-
-- **Use Python 3.11–3.13** for this project (recommended — these have full
-  prebuilt-wheel support today), or
-- Skip ML entirely — the app works completely fine without it.
-
-To install ML support:
-
+### 2. Run Application
 ```bash
-pip install -r requirements-ml.txt
-python -m ai.train_model      # trains and saves ai/model/risk_model.joblib
+python app.py
 ```
 
-A trained model is already included in this repo
-(`ai/model/risk_model.joblib`), so if `requirements-ml.txt` installs
-successfully, ML scoring works immediately without retraining.
+### 3. Access Dashboard
+Open **[http://localhost:8000](http://localhost:8000)** (or `http://127.0.0.1:8000`) in your browser:
+- Register an account or log in.
+- The ML engine initializes automatically on boot—no separate training or worker processes are required.
 
-If `requirements-ml.txt` isn't installed (or the model file is missing),
-the app **automatically detects this and falls back** to the deterministic
-rule-based engine — nothing crashes, the dashboard just shows "Rule-based
-risk engine active" instead of "ML risk engine active".
+---
 
-The SQLite DB (`app.db`) and folders `keys/`, `uploads/`, `encrypted/` are
-created automatically on first run.
+## System Architecture & Execution Flow
 
-## How it works
-
+```text
+ Upload File (.zip, .pdf, etc.)
+       │
+       ▼
+ Encrypt with ChaCha20-Poly1305 (Key v1 ACTIVE)
+       │
+       ▼
+ Random Forest ML Risk Assessment
+       │
+       ├────────────────────────────────────────┐
+       ▼                                        ▼
+ Risk ≤ 30 (LOW)                        Risk > 30 (MEDIUM / HIGH)
+ (e.g., PDF ≈ 29.7)                     (e.g., ZIP ≈ 42.0)
+       │                                        │
+ [Safe Range]                                   ▼
+ Key v1 remains ACTIVE                  Background Scheduler Triggered
+ No rotation required                           │
+                                                ▼
+                                        Decrypt with v1 Key
+                                                │
+                                                ▼
+                                        Generate Key v2 (256-bit)
+                                                │
+                                                ▼
+                                        Re-encrypt File Blob
+                                                │
+                                                ▼
+                                        v1 ➔ INACTIVE | v2 ➔ ACTIVE
+                                                │
+                                                ▼
+                                        Fresh Post-Rotation ML Analysis
+                                        (Threat mitigated: Score drops to 27 LOW)
+                                                │
+                                                ▼
+                                        Audit Logs Recorded (Fingerprints only)
+                                                │
+                                                ▼
+                                        Live UI Updates Automatically (v2 ACTIVE)
 ```
-Upload File
-    -> Encrypt with fresh 256-bit ChaCha20-Poly1305 key (v1)
-    -> Risk Analysis (rule-based engine, ai/risk_engine.py)
-    -> Risk Score computed from: encryption baseline, file type,
-       file age, key age, access/download count
-    -> Risk > Threshold (70)?
-         NO  -> key stays active, nothing else happens
-         YES -> Decrypt with old key
-                Generate new key (v_n+1)
-                Re-encrypt file with new key
-                Old key -> INACTIVE (kept on disk + DB, never deleted)
-                New key -> ACTIVE
-                Audit log entries written (KEY_ROTATION, RE_ENCRYPTION)
-```
 
-Rotation can also be **forced** from the UI for demo/evaluation purposes
-without waiting for risk to naturally cross the threshold.
+---
 
-## Project structure
+## Risk Scoring & Mitigation Model
 
-```
-AI-Key-Rotation/
-├── app.py              FastAPI app + all routes
-├── rotation.py          Core adaptive rotation orchestration
-├── config.py             Paths, risk weights, threshold
-├── database.py           SQLAlchemy engine/session
-│
-├── crypto/
-│   ├── chacha.py          Low-level ChaCha20-Poly1305 (key/nonce/enc/dec)
-│   ├── file_crypto.py      File <-> ciphertext-on-disk bridge
-│   └── key_manager.py      Key generation, storage, fingerprinting
-│
-├── auth/auth.py          Password hashing + session-based login
-├── models/models.py      User, FileRecord, KeyRecord, AuditLog (SQLAlchemy)
+Risk is evaluated on a **0–100 scale** with a **Threshold of 30**:
+
+| Score Tier | Level | Action Taken |
+|---|---|---|
+| **0 – 30** | `LOW` | **Safe**: Key remains active; monitoring continues. |
+| **31 – 60** | `MEDIUM` | **Rotation Required**: Background scheduler automatically rotates active key. |
+| **61 – 80** | `HIGH` | **High Threat**: Rapid rotation + mitigation logging. |
+| **81 – 100** | `CRITICAL` | **Severe Threat**: Compromised access indicators (multiple failed logins, abnormal hours). |
+
+### Contributing Factors
+- **Intrinsic Sensitivity**: Extension categorization (e.g., high-exposure `.zip`, `.exe`, `.sql` vs standard `.pdf`, `.docx`).
+- **Cryptographic Key Age**: Aging keys compound exposure over time.
+- **Access Anomaly**: Spike in download frequency.
+- **Authentication Anomalies**: Failed login attempts tied to the file owner's account.
+- **Temporal Anomalies**: Access outside standard business hours (e.g., late-night queries).
+- **Rotation Mitigation**: Active cryptographic mitigation grants **-15 risk credit** upon key renewal, returning scores to the safe band.
+
+---
+
+## Verification & Testing Guide
+
+### Test 1: Low-Risk File (PDF)
+1. Upload a standard `.pdf` document.
+2. Initial ML score produces $\approx \mathbf{29.7}$ (`LOW`).
+3. Key remains **`v1 ACTIVE`**; scheduler cycles confirm no rotation occurs.
+
+### Test 2: High-Risk Automatic Rotation (ZIP)
+1. Upload a `.zip` archive.
+2. ML predicts $\approx \mathbf{42.0}$ (`MEDIUM` $\rightarrow$ **ROTATION REQUIRED**).
+3. Without refreshing or clicking buttons, wait **15–30 seconds**.
+4. The background scheduler rotates key:
+   - `v1` $\rightarrow$ `INACTIVE`
+   - `v2` $\rightarrow$ `ACTIVE`
+   - Risk score automatically updates to $\approx \mathbf{27.0}$ (`LOW`).
+   - Audit trail registers `KEY_ROTATION` and `RE_ENCRYPTION`.
+5. Subsequent cycles keep `v2` steady without infinite rotation loops.
+
+### Test 3: Account Threat Simulation & Reset
+1. Attempt invalid logins to trigger `failed_login_attempts`.
+2. File risk spikes beyond threshold.
+3. System rotates to the next key version (`v3`), resets failed login penalties, and brings the asset back to safety.
+
+---
+
+## Project Directory Layout
+
+```text
+adaptive-ai-key-rotation/
+├── app.py                     # FastAPI application, auth, file routes & API
+├── rotation.py                # State-machine rotation orchestration & monitoring
+├── config.py                  # Cryptographic & scheduler configurations
+├── database.py                # SQLAlchemy SQLite session manager
 │
 ├── ai/
-│   ├── risk_engine.py      Rule-based engine + engine selection/fallback logic
-│   ├── ml_risk_engine.py    ML engine — loads trained Random Forest, predicts risk
-│   ├── features.py          Shared feature extraction (training + inference)
-│   ├── train_model.py        Generates synthetic data, trains + saves the model
-│   └── model/risk_model.joblib  Trained model artifact (included, ready to use)
+│   ├── risk_engine.py         # Unified risk scoring interface & baseline engine
+│   ├── ml_risk_engine.py      # Random Forest ML model loader & feature evaluator
+│   ├── features.py            # Feature vector extractor (train & inference parity)
+│   ├── train_model.py         # Random Forest training script (6,000 synthetic samples)
+│   └── model/
+│       └── risk_model.joblib  # Pre-trained Random Forest model artifact
 │
-├── logs/audit.py          Central audit-log writer
+├── crypto/
+│   ├── chacha.py              # Low-level ChaCha20-Poly1305 encryption primitives
+│   ├── file_crypto.py         # File read/write/re-encryption handler
+│   └── key_manager.py         # 256-bit key generator & SHA-256 fingerprinting
 │
-├── keys/                 Per-file, per-version key files (file_<id>_v<n>.key)
-├── uploads/                Transient upload staging (cleared after encrypt)
-├── encrypted/               Encrypted file blobs
+├── models/
+│   └── models.py              # User, FileRecord, KeyRecord, and AuditLog schemas
+├── logs/
+│   └── audit.py               # Cryptographically sanitized security event logger
 │
-├── static/style.css
-├── templates/             Jinja2 templates (dashboard, file detail, auth)
-└── requirements.txt
+├── templates/                 # Jinja2 HTML templates (Dashboard, File Detail, Auth)
+└── static/                    # Responsive CSS stylesheet
 ```
 
-## Why ChaCha20-Poly1305 instead of AES?
+---
 
-It's a modern AEAD (authenticated encryption) cipher — same security goals
-as AES-GCM, but software-friendly (no hardware AES-NI dependency) and a
-deliberately different choice from the typical AES/DES college project.
-256-bit key, 96-bit nonce, integrity + confidentiality in one pass.
+## Security & Compliance Considerations
 
-## Risk scoring: ML (Random Forest) with rule-based fallback
-
-`ai/risk_engine.py` exposes a single `.score(file_record, key_record)`
-interface. Two engines implement it:
-
-- **`RuleBasedRiskEngine`** (`ai/risk_engine.py`) — deterministic, explainable
-  formula:
-
-  | Factor | Contribution |
-  |---|---|
-  | Encryption baseline | +10 |
-  | File type (high/medium/low sensitivity) | +5 to +20 |
-  | File age | up to +25 |
-  | Key age | up to +30 |
-  | Download/access count | up to +15 |
-
-- **`MLRiskEngine`** (`ai/ml_risk_engine.py`) — a **Random Forest
-  Regressor** (scikit-learn) trained on features `file_age_days`,
-  `key_age_days`, `file_type_risk_level`, `download_count`, `file_size_kb`
-  (see `ai/features.py`). It's the **default/active engine** whenever a
-  trained model file exists at `ai/model/risk_model.joblib`.
-
-Threshold = **70**. Score above it -> `ROTATION REQUIRED`. This applies
-identically regardless of which engine produced the score.
-
-### Training the model
-
-```bash
-python -m ai.train_model
-```
-
-This generates a synthetic labeled dataset (6,000 samples) using a
-domain-knowledge "ground truth" risk function — the same factors as the
-rule engine, plus nonlinear interaction terms (e.g. an old key on a
-high-sensitivity file compounds risk faster than a plain sum) and gaussian
-noise — then trains a `RandomForestRegressor` on it and saves the model to
-`ai/model/risk_model.joblib`. On the run in this repo: **MAE ≈ 3.3 risk
-points, R² ≈ 0.94** on a held-out test split.
-
-**Why synthetic data:** this is an academic project without months of real
-historical incident/audit data to train on. The synthetic labels encode the
-same security reasoning a real dataset would need to reflect. The
-architecture — features in, model out, swappable engine — is exactly what
-would carry over to real historical audit-log data in a production
-deployment; only the training data source would change.
-
-### How it shows up in the app
-
-- Dashboard shows a banner: "🧠 ML risk engine active" whenever the model
-  is loaded.
-- Each file's detail page shows the ML-predicted total score, the same
-  named factors as reference input features (labelled as such, since a
-  Random Forest doesn't decompose into an additive sum), and a **Model
-  Insights** panel with the trained model's feature importances, MAE, and
-  R².
-- If no trained model is found (`ai/model/risk_model.joblib` missing), the
-  app **automatically falls back** to `RuleBasedRiskEngine` so it still
-  works end-to-end without ML — nothing crashes, dashboard shows "Rule-based
-  risk engine active" instead.
-
-Switching engines, if you ever want to force rule-based even with a trained
-model present, is a one-line change in `ai/risk_engine.py`
-(`_init_engine()`).
-
-## Security notes (for the demo/viva)
-
-- Raw key bytes are **never** shown in the UI by default — only SHA-256
-  **fingerprints**. A `DEMO_MODE_SHOW_KEY_EVIDENCE` flag in `config.py`
-  allows showing a truncated key preview for educational evaluation only;
-  set it to `False` for anything resembling production use.
-- Old keys are **never deleted** on rotation — they're marked `INACTIVE`
-  so key history and the audit trail stay intact.
-- Passwords are hashed with bcrypt (`passlib`), never stored in plaintext.
-- Plaintext uploads are deleted from `uploads/` immediately after
-  encryption — only ciphertext persists on disk.
-
-## What's left to build
-
-- Retraining on real historical data once the app has been running long
-  enough to accumulate genuine audit-log history (swap `ai/train_model.py`'s
-  synthetic `generate_dataset()` for a query against `AuditLog`/`FileRecord`).
-- Optional: scheduled/background risk re-analysis (e.g. APScheduler) instead
-  of on-demand only.
-- Deployment hardening: move `SESSION_SECRET` and any real secrets to
-  environment variables, add HTTPS, rate-limit login.
+- **Fingerprints Only**: Keys are identified in the UI and database exclusively by their truncated SHA-256 fingerprint (e.g., `7A8087A1998F...`).
+- **Immutable Key History**: Prior keys are never deleted; they are preserved as `INACTIVE` to ensure forensic auditability and historical decryption verification.
+- **Ephemeral Plaintext**: Uploaded plaintext files are unlinked from disk immediately following encryption; only ciphertext blobs persist.
+- **Bcrypt Password Storage**: Passwords are cryptographically salted and hashed using `passlib[bcrypt]`.

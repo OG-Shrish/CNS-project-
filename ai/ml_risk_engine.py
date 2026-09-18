@@ -16,6 +16,7 @@ score is the model's prediction.
 
 import datetime
 import os
+import warnings
 
 import joblib
 
@@ -37,17 +38,30 @@ class MLRiskEngine:
 
     def __init__(self, model_path: str = MODEL_PATH):
         if not os.path.exists(model_path):
+            try:
+                from ai.train_model import train
+                print(f"[MLRiskEngine] Model not found at {model_path}. Auto-training Random Forest model...")
+                train()
+            except Exception as e:
+                raise ModelNotTrainedError(
+                    f"No trained model found at {model_path} and auto-training failed: {e}."
+                )
+
+        if not os.path.exists(model_path):
             raise ModelNotTrainedError(
-                f"No trained model found at {model_path}. "
-                f"Run `python -m ai.train_model` first."
+                f"No trained model found at {model_path}."
             )
-        bundle = joblib.load(model_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            bundle = joblib.load(model_path)
+
         self.model = bundle["model"]
         self.feature_names = bundle["feature_names"]
         self.meta = {k: v for k, v in bundle.items() if k not in ("model",)}
 
     def score(self, file_record, key_record) -> RiskBreakdown:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now()
 
         file_age_days = (now - file_record.created_at).days if file_record.created_at else 0
         key_age_days = (now - key_record.created_at).days if (key_record and key_record.created_at) else 0
@@ -74,23 +88,44 @@ class MLRiskEngine:
         if local_hour < 6 or local_hour >= 23:
             time_risk = 15.0
 
-        # We inject these new manual factors into the ML predicted score to 
-        # ensure it immediately reacts to active threat signals like failed logins.
-        adjusted_predicted = min(100.0, predicted + failed_login_risk + time_risk)
+        # 8. Cryptographic Rotation Mitigation:
+        # When a key is rotated (v2, v3, etc.), active threat mitigation takes effect.
+        # Freshly rotated keys receive up to -15 points mitigation credit that decays as the key ages.
+        rotation_mitigation = 0.0
+        if key_record is not None and getattr(key_record, "version", 1) > 1:
+            rotation_mitigation = max(0.0, 15.0 - (key_age_days * 1.5))
+
+        # Combine Random Forest ML prediction with active context & rotation mitigation
+        adjusted_predicted = min(100.0, max(0.0, predicted + failed_login_risk + time_risk - rotation_mitigation))
         level = _level_for(adjusted_predicted)
         
         explanations = []
+
+        if rotation_mitigation > 0:
+            explanations.append(
+                f"Key rotated to v{key_record.version}: threat mitigated (-{rotation_mitigation:.0f} risk)"
+            )
+
         if file_type_risk_level(file_record.file_type) > 1:
             explanations.append("Sensitive file type accessed")
+
         if download_count > 5:
             explanations.append("High file access frequency")
+
         if failed_logins > 0:
             explanations.append("Multiple failed logins detected on owner account")
+
         if time_risk > 0:
             explanations.append("Unusual access time (outside business hours)")
+
+        if adjusted_predicted > RISK_THRESHOLD:
+            explanations.append(
+                f"ML predicted risk {adjusted_predicted:.0f} exceeds "
+                f"rotation threshold {RISK_THRESHOLD}"
+            )
+
         if len(explanations) == 0:
             explanations.append("Standard risk factors")
-
         # Reference sub-factors (for the "model inputs" panel in the UI)
         type_level = file_type_risk_level(file_record.file_type)
         breakdown = RiskBreakdown(
@@ -101,6 +136,7 @@ class MLRiskEngine:
             access_risk=min(download_count * 3.0, 15.0),
             failed_login_risk=failed_login_risk,
             time_risk=time_risk,
+            rotation_mitigation=rotation_mitigation,
             total=adjusted_predicted,
             level=level,
             threshold=30,

@@ -1,61 +1,96 @@
-{% extends "base.html" %}
-{% block title %}{{ file.original_filename }}{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}{{ file.original_filename }}{%
+endblock %} {% block content %}
 
 <div class="page-header">
   <h1>{{ file.original_filename }}</h1>
-  <div class="header-actions" style="display: flex; gap: 0.5rem;">
-    <a href="/file/{{ file.id }}/download" class="btn btn-secondary">Download (decrypt)</a>
-    <form method="post" action="/file/{{ file.id }}/delete" style="margin: 0;" onsubmit="return confirm('Delete this file and all keys permanently?');">
-      <button type="submit" class="btn btn-outline" style="border-color: var(--red); color: var(--red);">Delete File</button>
+  <div class="header-actions" style="display: flex; gap: 0.5rem">
+    <a href="/file/{{ file.id }}/download" class="btn btn-secondary"
+      >Download (decrypt)</a
+    >
+    <form
+      method="post"
+      action="/file/{{ file.id }}/delete"
+      style="margin: 0"
+      onsubmit="return confirm('Delete this file and all keys permanently?');"
+    >
+      <button
+        type="submit"
+        class="btn btn-outline"
+        style="border-color: var(--red); color: var(--red)"
+      >
+        Delete File
+      </button>
     </form>
   </div>
 </div>
 
 <div class="grid-2">
-
   <!-- Encryption Details -->
   <section class="card">
     <h2>Encryption Details</h2>
     <dl class="detail-list">
-      <dt>File</dt><dd>{{ file.original_filename }}</dd>
-      <dt>Algorithm</dt><dd>{{ file.algorithm }}</dd>
-      <dt>Key Version</dt><dd><span class="pill pill-version">v{{ file.active_key_version }}</span></dd>
-      <dt>Key Size</dt><dd>256 bits</dd>
-      <dt>Nonce</dt><dd>96 bits (12 bytes)</dd>
-      <dt>Status</dt><dd><span class="pill pill-encrypted">Encrypted &#10003;</span></dd>
+      <dt>File</dt>
+      <dd>{{ file.original_filename }}</dd>
+      <dt>Algorithm</dt>
+      <dd>{{ file.algorithm }}</dd>
+      <dt>Key Version</dt>
+      <dd>
+        <span class="pill pill-version">v{{ file.active_key_version }}</span>
+      </dd>
+      <dt>Key Size</dt>
+      <dd>256 bits</dd>
+      <dt>Nonce</dt>
+      <dd>96 bits (12 bytes)</dd>
+      <dt>Status</dt>
+      <dd><span class="pill pill-encrypted">Encrypted &#10003;</span></dd>
       <dt>Key Fingerprint</dt>
-      <dd class="mono">{{ active_key.fingerprint[:16].upper() if active_key else "—" }}...</dd>
+      <dd class="mono">
+        {{ active_key.fingerprint[:16].upper() if active_key else "—" }}...
+      </dd>
     </dl>
   </section>
 
   <!-- Risk Analysis -->
   <section class="card">
     <h2>
-      Risk Analysis
-      {% if engine_status.is_ml %}
-        <span class="pill pill-ml">&#129504; ML predicted</span>
+      Risk Analysis {% if engine_status.is_ml %}
+      <span class="pill pill-ml">&#129504; ML predicted</span>
       {% else %}
-        <span class="pill pill-rule">rule-based</span>
+      <span class="pill pill-rule">rule-based</span>
       {% endif %}
     </h2>
     <div class="risk-score-display">
-      <span class="risk-score-number">{{ "%.0f"|format(breakdown.total) }}</span><span class="risk-score-max">/100</span>
+      <span class="risk-score-number">{{ "%.0f"|format(breakdown.total) }}</span
+      ><span class="risk-score-max">/100</span>
       {% if breakdown.level == "CRITICAL" %}
-        <span class="pill pill-high glow-high">CRITICAL</span>
+      <span class="pill pill-high glow-high">CRITICAL</span>
       {% elif breakdown.level == "HIGH" %}
-        <span class="pill pill-high">HIGH</span>
+      <span class="pill pill-high">HIGH</span>
       {% elif breakdown.level == "MEDIUM" %}
-        <span class="pill pill-medium">MEDIUM</span>
+      <span class="pill pill-medium">MEDIUM</span>
       {% else %}
-        <span class="pill pill-low">LOW</span>
+      <span class="pill pill-low">LOW</span>
       {% endif %}
     </div>
 
     <!-- Explanations block -->
-    <div style="margin-bottom: 1.5rem; background: var(--surface-2); padding: 1rem; border-radius: var(--radius-sm);">
-      <h3 style="margin-top: 0; color: var(--text);">Risk Reasons:</h3>
-      <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+    <div
+      style="
+        margin-bottom: 1.5rem;
+        background: var(--surface-2);
+        padding: 1rem;
+        border-radius: var(--radius-sm);
+      "
+    >
+      <h3 style="margin-top: 0; color: var(--text)">Risk Reasons:</h3>
+      <ul
+        style="
+          margin: 0;
+          padding-left: 1.5rem;
+          color: var(--text-muted);
+          font-size: 0.9rem;
+        "
+      >
         {% for exp in breakdown.explanations %}
         <li>{{ exp }}</li>
         {% endfor %}
@@ -63,43 +98,85 @@
     </div>
 
     <table class="breakdown-table">
-      <tr><td>Encryption Risk</td><td>+{{ "%.0f"|format(breakdown.encryption_risk) }}</td></tr>
-      <tr><td>File Type Risk</td><td>+{{ "%.0f"|format(breakdown.file_type_risk) }}</td></tr>
-      <tr><td>File Age Risk</td><td>+{{ "%.0f"|format(breakdown.age_risk) }}</td></tr>
-      <tr><td>Key Age Risk</td><td>+{{ "%.0f"|format(breakdown.key_age_risk) }}</td></tr>
-      <tr><td>Access Risk</td><td>+{{ "%.0f"|format(breakdown.access_risk) }}</td></tr>
-      <tr><td>Failed Login Risk</td><td>+{{ "%.0f"|format(breakdown.failed_login_risk) }}</td></tr>
-      <tr><td>Unusual Time Risk</td><td>+{{ "%.0f"|format(breakdown.time_risk) }}</td></tr>
-      <tr class="total-row"><td>{{ "ML Predicted Total" if engine_status.is_ml else "Total" }}</td><td>{{ "%.0f"|format(breakdown.total) }}</td></tr>
+      <tr>
+        <td>Encryption Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.encryption_risk) }}</td>
+      </tr>
+      <tr>
+        <td>File Type Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.file_type_risk) }}</td>
+      </tr>
+      <tr>
+        <td>File Age Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.age_risk) }}</td>
+      </tr>
+      <tr>
+        <td>Key Age Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.key_age_risk) }}</td>
+      </tr>
+      <tr>
+        <td>Access Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.access_risk) }}</td>
+      </tr>
+      <tr>
+        <td>Failed Login Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.failed_login_risk) }}</td>
+      </tr>
+      <tr>
+        <td>Unusual Time Risk</td>
+        <td>+{{ "%.0f"|format(breakdown.time_risk) }}</td>
+      </tr>
+      {% if breakdown.rotation_mitigation > 0 %}
+      <tr>
+        <td>Rotation Mitigation</td>
+        <td style="color: var(--green)">-{{ "%.0f"|format(breakdown.rotation_mitigation) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="total-row">
+        <td>{{ "ML Predicted Total" if engine_status.is_ml else "Total" }}</td>
+        <td>{{ "%.0f"|format(breakdown.total) }}</td>
+      </tr>
     </table>
     {% if engine_status.is_ml %}
-    <p class="muted" style="font-size:0.78rem;">Rows above are the model's input features, shown for interpretability — the Random Forest total isn't a simple sum of these (it captures nonlinear interactions, e.g. an old key on a sensitive file type).</p>
+    <p class="muted" style="font-size: 0.78rem">
+      Rows above are the model's input features, shown for interpretability —
+      the Random Forest total isn't a simple sum of these (it captures nonlinear
+      interactions, e.g. an old key on a sensitive file type).
+    </p>
     {% endif %}
-    <p class="threshold-note">Threshold: {{ breakdown.threshold }} &mdash;
-      {% if breakdown.rotation_required %}
-        <strong class="text-high">ROTATION REQUIRED</strong>
+    <p class="threshold-note">
+      Threshold: {{ breakdown.threshold }} &mdash; {% if
+      breakdown.rotation_required %}
+      <strong class="text-high">ROTATION REQUIRED</strong>
+      {% elif file.active_key_version > 1 and breakdown.total > breakdown.threshold %}
+      <strong class="text-low" style="color: var(--cyan)">ROTATED (v{{ file.active_key_version }} active &mdash; monitoring)</strong>
       {% else %}
-        <strong class="text-low">key within safe range</strong>
+      <strong class="text-low">key within safe range</strong>
       {% endif %}
     </p>
     <form method="post" action="/file/{{ file.id }}/analyze">
       <button type="submit" class="btn btn-small">Re-run Analysis</button>
     </form>
   </section>
-
 </div>
 
 {% if engine_status.is_ml and feature_importances %}
 <section class="card">
   <h2>Model Insights <span class="pill pill-ml">Random Forest</span></h2>
-  <p class="muted">Trained on {{ model_info.n_samples }} samples &middot; MAE {{ model_info.mae }} risk points &middot; R&sup2; {{ model_info.r2 }}</p>
+  <p class="muted">
+    Trained on {{ model_info.n_samples }} samples &middot; MAE {{ model_info.mae
+    }} risk points &middot; R&sup2; {{ model_info.r2 }}
+  </p>
   <table class="breakdown-table">
     {% for name, importance in feature_importances %}
     <tr>
       <td>{{ name }}</td>
       <td>
         <div class="importance-bar-track">
-          <div class="importance-bar-fill" style="width: {{ (importance * 100)|round(1) }}%;"></div>
+          <div
+            class="importance-bar-fill"
+            style="width: {{ (importance * 100)|round(1) }}%;"
+          ></div>
         </div>
       </td>
       <td>{{ (importance * 100)|round(1) }}%</td>
@@ -112,17 +189,27 @@
 <!-- Rotation -->
 <section class="card">
   <h2>Key Rotation</h2>
-  <p class="muted">Rotation runs automatically when risk exceeds the threshold. You can also force a rotation for demo purposes.</p>
+  <p class="muted">
+    Rotation runs automatically when risk exceeds the threshold. You can also
+    force a rotation for demo purposes.
+  </p>
   <form method="post" action="/file/{{ file.id }}/rotate">
-    <button type="submit" class="btn btn-primary">Analyze &amp; Rotate If Needed</button>
-    <button type="submit" name="force" value="true" class="btn btn-outline">Force Rotate Now</button>
+    <button type="submit" class="btn btn-primary">
+      Analyze &amp; Rotate If Needed
+    </button>
+    <button type="submit" name="force" value="true" class="btn btn-outline">
+      Force Rotate Now
+    </button>
   </form>
 
   <h3>Key Version History</h3>
   <div class="table-responsive">
     <table class="key-history-table">
       <thead>
-        <tr><th>Version</th><th>Status</th><th>Encryption Key (Raw Hex)</th><th>Created</th></tr>
+        <th>Version</th>
+        <th>Status</th>
+        <th>Key Fingerprint</th>
+        <th>Created</th>
       </thead>
       <tbody>
         {% for k in keys %}
@@ -130,12 +217,14 @@
           <td>v{{ k.version }}</td>
           <td>
             {% if k.status == "ACTIVE" %}
-              <span class="pill pill-encrypted">ACTIVE</span>
+            <span class="pill pill-encrypted">ACTIVE</span>
             {% else %}
-              <span class="pill pill-inactive">INACTIVE</span>
+            <span class="pill pill-inactive">INACTIVE</span>
             {% endif %}
           </td>
-          <td class="mono" style="word-break: break-all;">{{ k.raw_key_hex }}</td>
+          <td class="mono">
+            {{ k.fingerprint[:16].upper() if k.fingerprint else "—" }}...
+          </td>
           <td>{{ k.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
         </tr>
         {% endfor %}
@@ -150,7 +239,14 @@
   <div class="table-responsive">
     <table class="audit-table">
       <thead>
-        <tr><th>Time</th><th>Action</th><th>Old</th><th>New</th><th>Risk</th><th>Details</th></tr>
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>Old</th>
+          <th>New</th>
+          <th>Risk</th>
+          <th>Details</th>
+        </tr>
       </thead>
       <tbody>
         {% for log in audit_logs %}
@@ -159,13 +255,45 @@
           <td><span class="pill pill-action">{{ log.action }}</span></td>
           <td>{{ "v"+log.old_version|string if log.old_version else "—" }}</td>
           <td>{{ "v"+log.new_version|string if log.new_version else "—" }}</td>
-          <td>{{ "%.0f"|format(log.risk_score) if log.risk_score is not none else "—" }}</td>
-          <td class="muted" style="word-break: break-all;">{{ log.details or "" }}</td>
+          <td>
+            {{ "%.0f"|format(log.risk_score) if log.risk_score is not none else
+            "—" }}
+          </td>
+          <td class="muted" style="word-break: break-all">
+            {{ log.details or "" }}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
+
+<script>
+  // Live synchronization: Polls read-only file status so the UI automatically
+  // reflects background scheduler key rotation without requiring manual browser refresh.
+  const currentKeyVersion = {{ file.active_key_version }};
+  const fileId = {{ file.id }};
+  let isChecking = false;
+
+  setInterval(async () => {
+    if (isChecking) return;
+    isChecking = true;
+    try {
+      const res = await fetch(`/api/file/${fileId}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.active_key_version && data.active_key_version !== currentKeyVersion) {
+          // Active key version updated by background scheduler!
+          window.location.reload();
+        }
+      }
+    } catch (e) {
+      // Silent catch for background polling
+    } finally {
+      isChecking = false;
+    }
+  }, 3000);
+</script>
 
 {% endblock %}

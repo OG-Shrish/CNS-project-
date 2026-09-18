@@ -52,6 +52,19 @@ class FileRecord(Base):
     audit_logs = relationship("AuditLog", back_populates="file", cascade="all, delete-orphan")
 
     def active_key(self):
+        from sqlalchemy.orm import object_session
+        session = object_session(self)
+        if session is not None:
+            key = (
+                session.query(KeyRecord)
+                .filter(
+                    KeyRecord.file_id == self.id,
+                    KeyRecord.version == self.active_key_version,
+                )
+                .first()
+            )
+            if key is not None:
+                return key
         for k in self.keys:
             if k.version == self.active_key_version:
                 return k

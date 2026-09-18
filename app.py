@@ -10,15 +10,15 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 import io
 
-from config import UPLOAD_DIR, SESSION_SECRET, DEMO_MODE_SHOW_KEY_EVIDENCE
+from config import UPLOAD_DIR, SESSION_SECRET, MONITORING_INTERVAL_SECONDS
 from database import get_db, init_db
 from models.models import User, FileRecord, KeyRecord, AuditLog
 from auth.auth import hash_password, verify_password, get_current_user
 from crypto import key_manager
 from crypto.file_crypto import encrypt_file, decrypt_file
-from ai.risk_engine import analyze, engine_status, get_active_engine
+from ai.risk_engine import analyze, engine_status, get_active_engine, init_risk_engine
 from logs.audit import log_event
-from rotation import rotate_key, analyze_risk
+from rotation import rotate_key, analyze_risk, check_all_files_background
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -27,31 +27,39 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-def check_all_files_background():
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        from models.models import FileRecord
-        from rotation import analyze_risk, rotate_key
-        files = db.query(FileRecord).all()
-        for file_record in files:
-            # Re-evaluate risk
-            breakdown = analyze_risk(db, file_record)
-            # If Medium, High, or Critical, rotate automatically
-            if breakdown.rotation_required:
-                rotate_key(db, file_record, forced=False)
-    except Exception as e:
-        print(f"Background monitoring error: {e}")
-    finally:
-        db.close()
+scheduler = BackgroundScheduler()
+
 
 @app.on_event("startup")
 def on_startup():
     init_db()
-    # Start the background risk monitoring job
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(check_all_files_background, 'interval', minutes=1)
-    scheduler.start()
+    print("[Startup] Database initialized.")
+    # 1. Initialize ML Risk Engine automatically on application boot
+    init_risk_engine()
+    status = engine_status()
+    if status["is_ml"]:
+        print(f"[Startup] AI/ML Risk Engine ACTIVE ({status['active_engine']}).")
+    else:
+        print(f"[Startup] AI/ML Risk Engine fallback: {status['fallback_reason']}.")
+
+    # 2. Start singleton background risk monitoring job
+    if not scheduler.running:
+        scheduler.add_job(
+            check_all_files_background,
+            "interval",
+            seconds=MONITORING_INTERVAL_SECONDS,
+            id="risk_monitoring_job",
+            replace_existing=True,
+        )
+        scheduler.start()
+        print(f"[Startup] Background risk monitoring active (interval: {MONITORING_INTERVAL_SECONDS}s).")
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        print("[Shutdown] Background scheduler stopped.")
 
 
 # --------------------------------------------------------------------------
@@ -253,7 +261,7 @@ def upload_file(
         action="UPLOAD",
         old_version=None,
         new_version=1,
-        details=f"File '{original_filename}' uploaded. Key: {key_bytes.hex().upper()}",
+        details=f"File '{original_filename}' uploaded. Initial key v1 fingerprint: {key_manager.short_fingerprint(key_bytes)}",
     )
 
     # run an initial risk analysis so the dashboard has a score right away
@@ -283,7 +291,34 @@ def file_detail(request: Request, file_id: int, db: Session = Depends(get_db)):
     active_key = file_record.active_key()
     breakdown = analyze(file_record, active_key)
 
-    active_key_bytes = key_manager.load_key(active_key.key_filename) if active_key else None
+    # Keep stored risk snapshot synchronized with fresh analysis
+    if file_record.last_risk_score != breakdown.total or file_record.last_risk_level != breakdown.level:
+        file_record.last_risk_score = breakdown.total
+        file_record.last_risk_level = breakdown.level
+        db.add(file_record)
+        db.commit()
+
+    # Check whether the current high-risk condition has already been handled
+    last_rotation = (
+        db.query(AuditLog)
+        .filter(AuditLog.file_id == file_record.id, AuditLog.action == "KEY_ROTATION")
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    if last_rotation:
+        safe_analysis_exists = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.file_id == file_record.id,
+                AuditLog.action == "RISK_ANALYSIS",
+                AuditLog.id > last_rotation.id,
+                AuditLog.risk_score <= breakdown.threshold,
+            )
+            .first()
+        )
+        if safe_analysis_exists is None:
+            # Active high-risk event has already been handled by rotation
+            breakdown.rotation_required = False
 
     audit_logs = (
         db.query(AuditLog)
@@ -293,11 +328,6 @@ def file_detail(request: Request, file_id: int, db: Session = Depends(get_db)):
     )
 
     keys = sorted(file_record.keys, key=lambda k: k.version, reverse=True)
-    for k in keys:
-        try:
-            k.raw_key_hex = key_manager.load_key(k.key_filename).hex().upper()
-        except Exception:
-            k.raw_key_hex = "UNAVAILABLE"
 
     status = engine_status()
     feature_importances = None
@@ -446,6 +476,51 @@ def delete_file(request: Request, file_id: int, db: Session = Depends(get_db)):
 
     return RedirectResponse("/dashboard", status_code=303)
 
+
+# --------------------------------------------------------------------------
+# Real-time state synchronization APIs (Read-only, does NOT trigger rotation)
+# --------------------------------------------------------------------------
+
+@app.get("/api/file/{file_id}/status")
+def file_status(request: Request, file_id: int, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return {"error": "Unauthorized"}
+    file_record = (
+        db.query(FileRecord)
+        .filter(FileRecord.id == file_id, FileRecord.owner_id == user.id)
+        .first()
+    )
+    if not file_record:
+        return {"error": "Not found"}
+    return {
+        "id": file_record.id,
+        "active_key_version": file_record.active_key_version,
+        "last_risk_score": file_record.last_risk_score,
+        "last_risk_level": file_record.last_risk_level,
+        "download_count": file_record.download_count,
+        "key_count": len(file_record.keys),
+    }
+
+
+@app.get("/api/dashboard/status")
+def dashboard_status(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return {"authenticated": False}
+    files = (
+        db.query(FileRecord.id, FileRecord.active_key_version, FileRecord.last_risk_score)
+        .filter(FileRecord.owner_id == user.id)
+        .all()
+    )
+    return {
+        "authenticated": True,
+        "file_count": len(files),
+        "files": [{"id": f[0], "version": f[1], "score": f[2]} for f in files],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    # reload=False ensures a single scheduler process and avoids watcher loops on file uploads/key generation
+    uvicorn.run(app, host="127.0.0.1", port=8000)

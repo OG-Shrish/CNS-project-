@@ -31,6 +31,7 @@ class RiskBreakdown:
     access_risk: float = 0.0
     failed_login_risk: float = 0.0
     time_risk: float = 0.0
+    rotation_mitigation: float = 0.0
     total: float = 0.0
     level: str = "LOW"
     threshold: int = RISK_THRESHOLD
@@ -47,6 +48,7 @@ class RiskBreakdown:
             "access_risk": round(self.access_risk, 2),
             "failed_login_risk": round(self.failed_login_risk, 2),
             "time_risk": round(self.time_risk, 2),
+            "rotation_mitigation": round(self.rotation_mitigation, 2),
             "total": round(self.total, 2),
             "level": self.level,
             "threshold": self.threshold,
@@ -122,10 +124,23 @@ class RuleBasedRiskEngine:
             time_risk = 15.0
             explanations.append("Unusual access time (outside business hours)")
 
-        total = encryption_risk + file_type_risk + age_risk + key_age_risk + access_risk + failed_login_risk + time_risk
-        total = min(total, 100.0)
+        # 8. Cryptographic Rotation Mitigation
+        rotation_mitigation = 0.0
+        if key_record is not None and getattr(key_record, "version", 1) > 1:
+            key_age_days = (now - key_record.created_at).days if key_record.created_at else 0
+            rotation_mitigation = max(0.0, 15.0 - (key_age_days * 1.5))
+            explanations.append(f"Key rotated to v{key_record.version}: threat mitigated (-{rotation_mitigation:.0f} risk)")
+
+        total = encryption_risk + file_type_risk + age_risk + key_age_risk + access_risk + failed_login_risk + time_risk - rotation_mitigation
+        total = max(0.0, min(total, 100.0))
 
         level = _level_for(total)
+
+        if total > 30:
+            explanations.append(
+                f"Risk score {total:.0f} exceeds the rotation threshold of 30"
+            )
+
         if len(explanations) == 0:
             explanations.append("Standard risk factors")
 
@@ -137,6 +152,7 @@ class RuleBasedRiskEngine:
             access_risk=access_risk,
             failed_login_risk=failed_login_risk,
             time_risk=time_risk,
+            rotation_mitigation=rotation_mitigation,
             total=total,
             level=level,
             threshold=30,  # Now fixed to 30 based on new tiers
@@ -162,17 +178,22 @@ _ACTIVE_ENGINE = None
 _ENGINE_INIT_ERROR = None
 
 
-def _init_engine():
+def init_risk_engine():
     global _ACTIVE_ENGINE, _ENGINE_INIT_ERROR
     try:
         from ai.ml_risk_engine import MLRiskEngine
         _ACTIVE_ENGINE = MLRiskEngine()
-    except Exception as e:  # model not trained yet, or ML deps missing
+        _ENGINE_INIT_ERROR = None
+        print(f"[AI Risk Engine] ML Risk Engine initialized successfully ({_ACTIVE_ENGINE.name}).")
+    except Exception as e:
         _ENGINE_INIT_ERROR = str(e)
         _ACTIVE_ENGINE = RuleBasedRiskEngine()
+        print(f"[AI Risk Engine] Warning: ML initialization failed ({e}). Falling back to {_ACTIVE_ENGINE.name}.")
+    return _ACTIVE_ENGINE
 
 
-_init_engine()
+_init_engine = init_risk_engine
+init_risk_engine()
 
 
 def get_active_engine():
@@ -182,8 +203,8 @@ def get_active_engine():
 def engine_status() -> dict:
     """For display in the UI — which engine is actually running right now."""
     return {
-        "active_engine": _ACTIVE_ENGINE.name,
-        "is_ml": _ACTIVE_ENGINE.name != RuleBasedRiskEngine.name,
+        "active_engine": _ACTIVE_ENGINE.name if _ACTIVE_ENGINE else "None",
+        "is_ml": _ACTIVE_ENGINE is not None and _ACTIVE_ENGINE.name != RuleBasedRiskEngine.name,
         "fallback_reason": _ENGINE_INIT_ERROR,
     }
 
