@@ -1,13 +1,50 @@
 {% extends "base.html" %}
-{% block title %}Upload{% endblock %}
+{% block title %}Upload File{% endblock %}
 {% block content %}
-<div class="auth-card">
-  <h1>Upload a file</h1>
-  <p class="muted">The file will be encrypted with a fresh, file-specific ChaCha20-Poly1305 key (v1) immediately on upload.</p>
-  <form method="post" action="/upload" enctype="multipart/form-data">
-    <label>Choose file</label>
-    <input type="file" name="file" required>
-    <button type="submit" class="btn btn-primary">Encrypt &amp; Upload</button>
-  </form>
+
+<!-- Breadcrumb -->
+<div class="gd-breadcrumb">
+  <a href="/dashboard">My Drive</a>
+  <span>&rsaquo;</span>
+  <span style="color: var(--gd-text); font-weight: 500;">Upload File</span>
 </div>
+
+<div class="gd-view-header">
+  <div>
+    <h1 class="gd-view-title">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      Upload &amp; Encrypt Asset
+    </h1>
+    <p class="gd-view-subtitle">Instant ChaCha20-Poly1305 authenticated encryption with Random Forest threat evaluation</p>
+  </div>
+</div>
+
+<div style="max-width: 680px; margin: 0 auto; padding-top: 20px;">
+  <div class="gd-card" style="padding: 36px;">
+    <form method="post" action="/upload" enctype="multipart/form-data">
+      <div class="gd-upload-dropzone" onclick="document.getElementById('fileUploadInput').click();">
+        <div class="gd-upload-icon">&#128194;</div>
+        <div style="font-size: 16px; font-weight: 500; color: var(--gd-text); margin-bottom: 6px;">Choose a file or click to browse</div>
+        <p style="font-size: 13px; color: var(--gd-text-muted); margin-bottom: 20px;">
+          Supports .zip, .pdf, .docx, .sql, .exe, .csv, and any binary asset.
+        </p>
+        <input type="file" id="fileUploadInput" name="file" required style="display: block; margin: 0 auto; font-size: 13px; color: var(--gd-text-secondary);">
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px;">
+        <span style="font-size: 12px; color: var(--gd-text-muted);">
+          &#128274; Plaintext is securely erased from disk immediately after encryption.
+        </span>
+        <button type="submit" class="gd-btn gd-btn-primary" style="padding: 10px 28px;">
+          Encrypt &amp; Upload
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}

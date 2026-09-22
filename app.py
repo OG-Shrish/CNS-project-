@@ -18,7 +18,12 @@ from crypto import key_manager
 from crypto.file_crypto import encrypt_file, decrypt_file
 from ai.risk_engine import analyze, engine_status, get_active_engine, init_risk_engine
 from logs.audit import log_event
-from rotation import rotate_key, analyze_risk, check_all_files_background
+from rotation import (
+    rotate_key,
+    analyze_risk,
+    check_all_files_background,
+    is_rotation_eligible,
+)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -299,24 +304,8 @@ def file_detail(request: Request, file_id: int, db: Session = Depends(get_db)):
         db.commit()
 
     # Check whether the current high-risk condition has already been handled
-    last_rotation = (
-        db.query(AuditLog)
-        .filter(AuditLog.file_id == file_record.id, AuditLog.action == "KEY_ROTATION")
-        .order_by(AuditLog.id.desc())
-        .first()
-    )
-    if last_rotation:
-        safe_analysis_exists = (
-            db.query(AuditLog)
-            .filter(
-                AuditLog.file_id == file_record.id,
-                AuditLog.action == "RISK_ANALYSIS",
-                AuditLog.id > last_rotation.id,
-                AuditLog.risk_score <= breakdown.threshold,
-            )
-            .first()
-        )
-        if safe_analysis_exists is None:
+    if breakdown.rotation_required:
+        if not is_rotation_eligible(db, file_record, breakdown.threshold):
             # Active high-risk event has already been handled by rotation
             breakdown.rotation_required = False
 
@@ -368,7 +357,9 @@ def trigger_analysis(request: Request, file_id: int, db: Session = Depends(get_d
         .first()
     )
     if file_record:
-        analyze_risk(db, file_record)
+        breakdown = analyze_risk(db, file_record, log_audit=True)
+        if breakdown.rotation_required and is_rotation_eligible(db, file_record, breakdown.threshold):
+            rotate_key(db, file_record, forced=False, breakdown=breakdown)
     return RedirectResponse(f"/file/{file_id}", status_code=303)
 
 
@@ -523,4 +514,6 @@ def dashboard_status(request: Request, db: Session = Depends(get_db)):
 if __name__ == "__main__":
     import uvicorn
     # reload=False ensures a single scheduler process and avoids watcher loops on file uploads/key generation
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port)

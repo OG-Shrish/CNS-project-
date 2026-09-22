@@ -3,26 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Risk-Aware Key Rotation{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v=3">
+  <title>{% block title %}Security Drive{% endblock %} - Adaptive Key Rotation</title>
+  <link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
-  <nav class="navbar">
-    <div class="nav-brand">
-      <span class="brand-mark">&#128274;</span> Adaptive Key Rotation
+
+  <!-- Top Google Drive Bar -->
+  <header class="gd-header">
+    <a href="/dashboard" class="gd-brand">
+      <div class="gd-logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M12 8v4"/>
+          <path d="M12 16h.01"/>
+        </svg>
+      </div>
+      <div class="gd-brand-text">
+        Security <span>Drive</span>
+      </div>
+    </a>
+
+    <!-- Omni Search Bar -->
+    <div class="gd-search-bar">
+      <div class="gd-search-input-wrapper">
+        <span class="gd-search-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </span>
+        <input type="text" id="gdOmniSearch" class="gd-search-input" placeholder="Search encrypted files, key versions, and security logs..." autocomplete="off">
+      </div>
     </div>
+
+    <!-- Right Header Profile & Controls -->
+    <div class="gd-header-right">
+      <div class="gd-ml-badge" title="ChaCha20-Poly1305 AEAD + Random Forest Risk Engine">
+        <span class="gd-ml-dot"></span>
+        <span>Adaptive ML Active</span>
+      </div>
+
+      {% if user %}
+      <div class="gd-user-pill">
+        <div class="gd-user-avatar">{{ user.username[0]|upper }}</div>
+        <span>{{ user.username }}</span>
+      </div>
+      <a href="/logout" class="gd-logout-btn" title="Sign out of Security Drive">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        Logout
+      </a>
+      {% else %}
+      <a href="/login" class="gd-btn gd-btn-outline" style="padding: 6px 16px;">Sign In</a>
+      <a href="/register" class="gd-btn gd-btn-primary" style="padding: 6px 16px;">Register</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- App Body Layout -->
+  <div class="{% if user %}gd-app-layout{% else %}gd-full-layout{% endif %}">
     {% if user %}
-    <div class="nav-links">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/activity">Activity</a>
-      <a href="/upload">Upload</a>
-      <span class="nav-user">{{ user.username }}</span>
-      <a href="/logout" class="nav-logout">Logout</a>
-    </div>
+    <aside class="gd-sidebar">
+      <div>
+        <!-- + New Button -->
+        <a href="/upload" class="gd-fab-new">
+          <span class="gd-plus-icon">+</span>
+          <span>New Upload</span>
+        </a>
+
+        <!-- Navigation Menu -->
+        <nav class="gd-nav-menu">
+          <a href="/dashboard" class="gd-nav-item {% if request.url.path == '/dashboard' or request.url.path == '/' %}active{% endif %}">
+            <span class="gd-nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </span>
+            <span>My Drive</span>
+          </a>
+
+          <a href="/activity" class="gd-nav-item {% if request.url.path == '/activity' %}active{% endif %}">
+            <span class="gd-nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </span>
+            <span>Security Activity</span>
+          </a>
+
+          <a href="/upload" class="gd-nav-item {% if request.url.path == '/upload' %}active{% endif %}">
+            <span class="gd-nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </span>
+            <span>Upload File</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Security & Cryptography Policy Card -->
+      <div class="gd-sidebar-security">
+        <div class="gd-sec-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Vault Encryption
+        </div>
+        <div class="gd-sec-bar">
+          <div class="gd-sec-bar-fill"></div>
+        </div>
+        <div class="gd-sec-desc">
+          ChaCha20-Poly1305 &middot; 256-bit keys &middot; 96-bit nonces. Keys are rotated autonomously when risk &gt; 30.
+        </div>
+      </div>
+    </aside>
     {% endif %}
-  </nav>
-  <main class="container">
-    {% block content %}{% endblock %}
-  </main>
+
+    <!-- Main Workspace Container -->
+    <main class="{% if user %}gd-main-workspace{% else %}gd-full-container{% endif %}">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Live Client-Side Search Filter -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const searchInput = document.getElementById("gdOmniSearch");
+      if (searchInput) {
+        searchInput.addEventListener("input", (e) => {
+          const query = e.target.value.toLowerCase().trim();
+          const tableRows = document.querySelectorAll(".gd-file-table tbody tr");
+          tableRows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(query) ? "" : "none";
+          });
+        });
+      }
+    });
+  </script>
 </body>
 </html>

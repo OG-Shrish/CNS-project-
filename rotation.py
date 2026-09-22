@@ -26,6 +26,8 @@ Flow:
     Audit log created
 """
 
+import datetime
+
 from sqlalchemy.orm import Session
 
 from ai.risk_engine import analyze, RiskBreakdown
@@ -69,6 +71,81 @@ def analyze_risk(
     return breakdown
 
 
+def is_rotation_eligible(db: Session, file_record: FileRecord, threshold: float = 30.0) -> bool:
+    """
+    Determine whether the current active key is eligible for rotation.
+
+    State Machine Rules:
+    1. If current active key is v1 (initial key), it has never been rotated -> ELIGIBLE.
+    2. If current active key is v > 1, find the rotation that activated this key version (last_rotation).
+    3. If no last_rotation record exists in audit logs -> ELIGIBLE.
+    4. If the active key has experienced a SAFE state (risk <= threshold) at or after activation,
+       then any subsequent risk > threshold is a NEW eligible high-risk event -> ELIGIBLE.
+       A safe state is recognized if:
+         a) last_rotation.risk_score <= threshold (key started in safe band), OR
+         b) any audit log on or after last_rotation.id has risk_score <= threshold, OR
+         c) file_record.last_risk_score <= threshold prior to crossing.
+    5. Old key / historical rotation protection:
+       If the key was created/rotated in a previous session or more than 1 hour ago,
+       historical rotation records do not permanently block legitimate rotations -> ELIGIBLE.
+    6. Otherwise, if the key was recently activated to handle a high-risk event and risk has
+       continuously remained > threshold without returning to safe -> NOT ELIGIBLE (already handled; prevent loops).
+    """
+    active_key = file_record.active_key()
+    if active_key is None or active_key.version <= 1:
+        return True
+
+    # Find the rotation event that created this current active key version
+    last_rotation = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.file_id == file_record.id,
+            AuditLog.action == "KEY_ROTATION",
+            AuditLog.new_version == active_key.version,
+        )
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+
+    if last_rotation is None:
+        return True
+
+    # 1. Did this key version start in the safe range when rotated?
+    if last_rotation.risk_score is not None and last_rotation.risk_score <= threshold:
+        return True
+
+    # 2. Was there any audit log on or after last_rotation with a safe score?
+    safe_log = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.file_id == file_record.id,
+            AuditLog.id >= last_rotation.id,
+            AuditLog.risk_score.isnot(None),
+            AuditLog.risk_score <= threshold,
+        )
+        .first()
+    )
+    if safe_log is not None:
+        return True
+
+    # 3. Was the last recorded risk score on the file safe?
+    if file_record.last_risk_score is not None and file_record.last_risk_score <= threshold:
+        return True
+
+    # 4. Old key / historical rotation protection:
+    # If the key was created/rotated in a previous session or more than 1 hour ago,
+    # historical rotation records do not permanently block legitimate rotations.
+    now_dt = datetime.datetime.now()
+    ref_time = last_rotation.created_at or active_key.created_at
+    if ref_time:
+        age_seconds = (now_dt - ref_time).total_seconds()
+        if age_seconds > 3600:
+            return True
+
+    # Key was recently created for this high-risk event and threat has not subsided
+    return False
+
+
 def rotate_key(
     db: Session,
     file_record: FileRecord,
@@ -110,44 +187,18 @@ def rotate_key(
 
     # ---------------------------------------------------------------
     # State Machine: Prevent repeated rotations for the SAME high-risk condition.
-    #
-    # A new automatic rotation is allowed only after the risk has
-    # previously returned to the safe range since the last rotation.
-    # We check by monotonic AuditLog.id to prevent clock skew issues.
     # ---------------------------------------------------------------
     if not forced and breakdown.rotation_required:
-        last_rotation = (
-            db.query(AuditLog)
-            .filter(
-                AuditLog.file_id == file_record.id,
-                AuditLog.action == "KEY_ROTATION",
-            )
-            .order_by(AuditLog.id.desc())
-            .first()
-        )
-
-        if last_rotation:
-            safe_analysis_exists = (
-                db.query(AuditLog)
-                .filter(
-                    AuditLog.file_id == file_record.id,
-                    AuditLog.action == "RISK_ANALYSIS",
-                    AuditLog.id > last_rotation.id,
-                    AuditLog.risk_score <= breakdown.threshold,
-                )
-                .first()
-            )
-
-            if safe_analysis_exists is None:
-                return {
-                    "rotated": False,
-                    "reason": (
-                        "High-risk condition already handled. "
-                        "Waiting for risk to return to the safe range "
-                        "before allowing another automatic rotation."
-                    ),
-                    "risk": breakdown.as_dict(),
-                }
+        if not is_rotation_eligible(db, file_record, breakdown.threshold):
+            return {
+                "rotated": False,
+                "reason": (
+                    "High-risk condition already handled. "
+                    "Waiting for risk to return to the safe range "
+                    "before allowing another automatic rotation."
+                ),
+                "risk": breakdown.as_dict(),
+            }
 
     # ---------------------------------------------------------------
     # 1. Load and decrypt using the currently active key
@@ -275,13 +326,19 @@ def check_all_files_background():
 
             breakdown = analyze(file_record, active_key)
 
-            # Check if risk score or risk level has changed meaningfully
+            # Check if risk score or risk level has changed meaningfully, or crossed threshold
             old_score = file_record.last_risk_score
             old_level = file_record.last_risk_level
             score_diff = abs((old_score or 0.0) - breakdown.total)
             level_changed = old_level != breakdown.level
+            threshold_crossed = (
+                (old_score is not None) and (
+                    (old_score > breakdown.threshold and breakdown.total <= breakdown.threshold) or
+                    (old_score <= breakdown.threshold and breakdown.total > breakdown.threshold)
+                )
+            )
 
-            if old_score is None or score_diff >= 0.5 or level_changed:
+            if old_score is None or score_diff >= 0.5 or level_changed or threshold_crossed:
                 file_record.last_risk_score = breakdown.total
                 file_record.last_risk_level = breakdown.level
                 db.add(file_record)

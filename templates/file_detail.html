@@ -1,277 +1,361 @@
-{% extends "base.html" %} {% block title %}{{ file.original_filename }}{%
-endblock %} {% block content %}
+{% extends "base.html" %}
+{% block title %}{{ file.original_filename }} - File Details{% endblock %}
+{% block content %}
 
-<div class="page-header">
-  <h1>{{ file.original_filename }}</h1>
-  <div class="header-actions" style="display: flex; gap: 0.5rem">
-    <a href="/file/{{ file.id }}/download" class="btn btn-secondary"
-      >Download (decrypt)</a
-    >
-    <form
-      method="post"
-      action="/file/{{ file.id }}/delete"
-      style="margin: 0"
-      onsubmit="return confirm('Delete this file and all keys permanently?');"
-    >
-      <button
-        type="submit"
-        class="btn btn-outline"
-        style="border-color: var(--red); color: var(--red)"
-      >
-        Delete File
+<!-- Google Drive Breadcrumb -->
+<div class="gd-breadcrumb">
+  <a href="/dashboard">My Drive</a>
+  <span>&rsaquo;</span>
+  <span style="color: var(--gd-text); font-weight: 500;">{{ file.original_filename }}</span>
+</div>
+
+<!-- Header & Action Bar -->
+<div class="gd-view-header" style="flex-wrap: wrap; gap: 16px;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div class="gd-file-icon {% if file.file_type == 'pdf' %}gd-icon-pdf{% elif file.file_type in ['zip', 'rar', 'tar', 'gz'] %}gd-icon-zip{% elif file.file_type in ['doc', 'docx', 'txt', 'csv', 'xlsx'] %}gd-icon-doc{% elif file.file_type in ['exe', 'sql', 'db', 'pem', 'key'] %}gd-icon-code{% else %}gd-icon-generic{% endif %}" style="width: 44px; height: 44px; font-size: 22px;">
+      {% if file.file_type == 'pdf' %}
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+      </svg>
+      {% elif file.file_type in ['zip', 'rar', 'tar', 'gz'] %}
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"></path>
+        <path d="M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"></path>
+        <line x1="10" y1="12" x2="14" y2="12"></line>
+      </svg>
+      {% else %}
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+        <polyline points="13 2 13 9 20 9"></polyline>
+      </svg>
+      {% endif %}
+    </div>
+    <div>
+      <h1 class="gd-view-title" style="margin-bottom: 2px;">{{ file.original_filename }}</h1>
+      <div style="font-size: 13px; color: var(--gd-text-muted); display: flex; align-items: center; gap: 8px;">
+        <span>{{ (file.file_size / 1024)|round|int }} KB</span>
+        <span>&middot;</span>
+        <span>Key v{{ file.active_key_version }} Active</span>
+        <span>&middot;</span>
+        <span>{{ file.download_count or 0 }} downloads</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary Actions Toolbar -->
+  <div class="gd-view-actions" style="flex-wrap: wrap;">
+    <a href="/file/{{ file.id }}/download" class="gd-btn gd-btn-primary" title="Decrypt and download original file">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Download &amp; Decrypt
+    </a>
+
+    <form method="post" action="/file/{{ file.id }}/analyze" style="margin: 0;">
+      <button type="submit" class="gd-btn gd-btn-secondary" title="Perform fresh ML risk calculation">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Re-run Analysis
+      </button>
+    </form>
+
+    <form method="post" action="/file/{{ file.id }}/rotate" style="display: flex; gap: 8px; margin: 0;">
+      <button type="submit" class="gd-btn gd-btn-outline" title="Trigger key rotation if risk exceeds threshold">
+        Rotate If Needed
+      </button>
+      <button type="submit" name="force" value="true" class="gd-btn gd-btn-outline" style="color: var(--gd-text-muted);" title="Force rotation for testing">
+        Force Rotate
+      </button>
+    </form>
+
+    <form method="post" action="/file/{{ file.id }}/delete" style="margin: 0;" onsubmit="return confirm('Permanently delete this file and all associated encryption keys?');">
+      <button type="submit" class="gd-btn gd-btn-danger-outline" title="Delete file and keys permanently">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        Delete
       </button>
     </form>
   </div>
 </div>
 
-<div class="grid-2">
-  <!-- Encryption Details -->
-  <section class="card">
-    <h2>Encryption Details</h2>
-    <dl class="detail-list">
-      <dt>File</dt>
-      <dd>{{ file.original_filename }}</dd>
-      <dt>Algorithm</dt>
-      <dd>{{ file.algorithm }}</dd>
-      <dt>Key Version</dt>
-      <dd>
-        <span class="pill pill-version">v{{ file.active_key_version }}</span>
-      </dd>
-      <dt>Key Size</dt>
-      <dd>256 bits</dd>
-      <dt>Nonce</dt>
-      <dd>96 bits (12 bytes)</dd>
-      <dt>Status</dt>
-      <dd><span class="pill pill-encrypted">Encrypted &#10003;</span></dd>
-      <dt>Key Fingerprint</dt>
-      <dd class="mono">
-        {{ active_key.fingerprint[:16].upper() if active_key else "—" }}...
-      </dd>
-    </dl>
-  </section>
+<!-- Two-Column Google Drive Layout -->
+<div class="gd-detail-grid">
+  
+  <!-- Left Column: Risk Engine & Security Details -->
+  <div>
 
-  <!-- Risk Analysis -->
-  <section class="card">
-    <h2>
-      Risk Analysis {% if engine_status.is_ml %}
-      <span class="pill pill-ml">&#129504; ML predicted</span>
-      {% else %}
-      <span class="pill pill-rule">rule-based</span>
-      {% endif %}
-    </h2>
-    <div class="risk-score-display">
-      <span class="risk-score-number">{{ "%.0f"|format(breakdown.total) }}</span
-      ><span class="risk-score-max">/100</span>
-      {% if breakdown.level == "CRITICAL" %}
-      <span class="pill pill-high glow-high">CRITICAL</span>
-      {% elif breakdown.level == "HIGH" %}
-      <span class="pill pill-high">HIGH</span>
-      {% elif breakdown.level == "MEDIUM" %}
-      <span class="pill pill-medium">MEDIUM</span>
-      {% else %}
-      <span class="pill pill-low">LOW</span>
-      {% endif %}
-    </div>
+    <!-- AI Risk Analysis Card -->
+    <section class="gd-card">
+      <div class="gd-card-header">
+        <h2 class="gd-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          AI Risk Assessment
+        </h2>
+        {% if engine_status.is_ml %}
+        <span class="gd-pill gd-pill-version">&#129504; Random Forest Regressor</span>
+        {% else %}
+        <span class="gd-pill gd-pill-action">Rule-Based Fallback</span>
+        {% endif %}
+      </div>
 
-    <!-- Explanations block -->
-    <div
-      style="
-        margin-bottom: 1.5rem;
-        background: var(--surface-2);
-        padding: 1rem;
-        border-radius: var(--radius-sm);
-      "
-    >
-      <h3 style="margin-top: 0; color: var(--text)">Risk Reasons:</h3>
-      <ul
-        style="
-          margin: 0;
-          padding-left: 1.5rem;
-          color: var(--text-muted);
-          font-size: 0.9rem;
-        "
-      >
+      <!-- Risk Score Indicator -->
+      <div class="gd-risk-score-box">
+        <span class="gd-risk-number" style="{% if breakdown.level in ['HIGH', 'CRITICAL'] %}color: var(--gd-red);{% elif breakdown.level == 'MEDIUM' %}color: var(--gd-amber);{% else %}color: var(--gd-green);{% endif %}">
+          {{ "%.0f"|format(breakdown.total) }}
+        </span>
+        <span class="gd-risk-denom">/ 100</span>
+        
+        <div style="margin-left: 12px;">
+          {% if breakdown.level == "CRITICAL" %}
+          <span class="gd-pill gd-pill-high">CRITICAL RISK</span>
+          {% elif breakdown.level == "HIGH" %}
+          <span class="gd-pill gd-pill-high">HIGH RISK</span>
+          {% elif breakdown.level == "MEDIUM" %}
+          <span class="gd-pill gd-pill-medium">MEDIUM RISK</span>
+          {% else %}
+          <span class="gd-pill gd-pill-low">&#10003; LOW RISK (SAFE)</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Threshold Note -->
+      <div style="padding: 10px 14px; background-color: var(--gd-surface-variant); border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
+        <span><strong>Rotation Threshold:</strong> {{ breakdown.threshold }}</span>
+        {% if breakdown.rotation_required %}
+        <strong style="color: var(--gd-red);">&#9888; ROTATION REQUIRED</strong>
+        {% elif file.active_key_version > 1 and breakdown.total > breakdown.threshold %}
+        <strong style="color: var(--gd-cyan);">&#10003; ROTATED (v{{ file.active_key_version }} active &mdash; monitoring)</strong>
+        {% else %}
+        <strong style="color: var(--gd-green);">&#10003; Key within safe range</strong>
+        {% endif %}
+      </div>
+
+      <!-- Explanations Chips -->
+      <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--gd-text-muted); letter-spacing: 0.4px; margin-bottom: 10px;">Security Evaluation Context</h3>
+      <div class="gd-chip-list">
         {% for exp in breakdown.explanations %}
-        <li>{{ exp }}</li>
+        <div class="gd-chip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          {{ exp }}
+        </div>
         {% endfor %}
-      </ul>
-    </div>
+      </div>
 
-    <table class="breakdown-table">
-      <tr>
-        <td>Encryption Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.encryption_risk) }}</td>
-      </tr>
-      <tr>
-        <td>File Type Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.file_type_risk) }}</td>
-      </tr>
-      <tr>
-        <td>File Age Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.age_risk) }}</td>
-      </tr>
-      <tr>
-        <td>Key Age Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.key_age_risk) }}</td>
-      </tr>
-      <tr>
-        <td>Access Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.access_risk) }}</td>
-      </tr>
-      <tr>
-        <td>Failed Login Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.failed_login_risk) }}</td>
-      </tr>
-      <tr>
-        <td>Unusual Time Risk</td>
-        <td>+{{ "%.0f"|format(breakdown.time_risk) }}</td>
-      </tr>
-      {% if breakdown.rotation_mitigation > 0 %}
-      <tr>
-        <td>Rotation Mitigation</td>
-        <td style="color: var(--green)">-{{ "%.0f"|format(breakdown.rotation_mitigation) }}</td>
-      </tr>
-      {% endif %}
-      <tr class="total-row">
-        <td>{{ "ML Predicted Total" if engine_status.is_ml else "Total" }}</td>
-        <td>{{ "%.0f"|format(breakdown.total) }}</td>
-      </tr>
-    </table>
-    {% if engine_status.is_ml %}
-    <p class="muted" style="font-size: 0.78rem">
-      Rows above are the model's input features, shown for interpretability —
-      the Random Forest total isn't a simple sum of these (it captures nonlinear
-      interactions, e.g. an old key on a sensitive file type).
-    </p>
+      <!-- Feature Breakdown Table -->
+      <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--gd-text-muted); letter-spacing: 0.4px; margin-bottom: 10px;">Feature Input Breakdown</h3>
+      <table class="gd-breakdown-table">
+        <tbody>
+          <tr>
+            <td>Baseline Encryption Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.encryption_risk) }}</td>
+          </tr>
+          <tr>
+            <td>File Type Sensitivity ({{ file.file_type|upper }})</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.file_type_risk) }}</td>
+          </tr>
+          <tr>
+            <td>File Age Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.age_risk) }}</td>
+          </tr>
+          <tr>
+            <td>Key Age Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.key_age_risk) }}</td>
+          </tr>
+          <tr>
+            <td>Access Frequency Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.access_risk) }}</td>
+          </tr>
+          <tr>
+            <td>Account Failed Login Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.failed_login_risk) }}</td>
+          </tr>
+          <tr>
+            <td>Temporal Anomaly Risk</td>
+            <td style="text-align: right; font-weight: 500;">+{{ "%.0f"|format(breakdown.time_risk) }}</td>
+          </tr>
+          {% if breakdown.rotation_mitigation > 0 %}
+          <tr>
+            <td style="color: var(--gd-green); font-weight: 500;">Active Cryptographic Mitigation (Fresh Key)</td>
+            <td style="text-align: right; color: var(--gd-green); font-weight: 600;">-{{ "%.0f"|format(breakdown.rotation_mitigation) }}</td>
+          </tr>
+          {% endif %}
+          <tr class="total-row">
+            <td>{{ "Random Forest Predicted Risk" if engine_status.is_ml else "Total Risk Score" }}</td>
+            <td style="text-align: right; font-size: 16px; {% if breakdown.level in ['HIGH', 'CRITICAL'] %}color: var(--gd-red);{% elif breakdown.level == 'MEDIUM' %}color: var(--gd-amber);{% else %}color: var(--gd-green);{% endif %}">
+              {{ "%.0f"|format(breakdown.total) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Model Insights Card (if ML) -->
+    {% if engine_status.is_ml and feature_importances %}
+    <section class="gd-card">
+      <div class="gd-card-header">
+        <h2 class="gd-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+          </svg>
+          ML Feature Weights &amp; Importance
+        </h2>
+        <span style="font-size: 12px; color: var(--gd-text-muted);">
+          {{ model_info.n_samples }} samples &middot; MAE {{ model_info.mae }} &middot; R&sup2; {{ model_info.r2 }}
+        </span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% for name, importance in feature_importances %}
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
+            <span style="color: var(--gd-text-secondary); text-transform: capitalize;">{{ name.replace('_', ' ') }}</span>
+            <span style="font-weight: 600; color: var(--gd-text);">{{ (importance * 100)|round(1) }}%</span>
+          </div>
+          <div class="gd-bar-track">
+            <div class="gd-bar-fill" style="width: {{ (importance * 100)|round(1) }}%;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
     {% endif %}
-    <p class="threshold-note">
-      Threshold: {{ breakdown.threshold }} &mdash; {% if
-      breakdown.rotation_required %}
-      <strong class="text-high">ROTATION REQUIRED</strong>
-      {% elif file.active_key_version > 1 and breakdown.total > breakdown.threshold %}
-      <strong class="text-low" style="color: var(--cyan)">ROTATED (v{{ file.active_key_version }} active &mdash; monitoring)</strong>
-      {% else %}
-      <strong class="text-low">key within safe range</strong>
-      {% endif %}
-    </p>
-    <form method="post" action="/file/{{ file.id }}/analyze">
-      <button type="submit" class="btn btn-small">Re-run Analysis</button>
-    </form>
-  </section>
+
+    <!-- Encryption Metadata Card -->
+    <section class="gd-card">
+      <div class="gd-card-header">
+        <h2 class="gd-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Cryptographic Specifications
+        </h2>
+        <span class="gd-pill gd-pill-low">&#10003; 256-bit AEAD</span>
+      </div>
+
+      <div class="gd-meta-list">
+        <div class="gd-meta-dt">Algorithm</div>
+        <div class="gd-meta-dd"><strong>{{ file.algorithm }}</strong> (RFC 8439 Authenticated Encryption)</div>
+
+        <div class="gd-meta-dt">Active Key Version</div>
+        <div class="gd-meta-dd"><span class="gd-pill gd-pill-version">v{{ file.active_key_version }} ACTIVE</span></div>
+
+        <div class="gd-meta-dt">Key Length</div>
+        <div class="gd-meta-dd">256 bits (32 bytes cryptographically secure random)</div>
+
+        <div class="gd-meta-dt">Nonce Size</div>
+        <div class="gd-meta-dd">96 bits (12 bytes unique per rotation)</div>
+
+        <div class="gd-meta-dt">SHA-256 Fingerprint</div>
+        <div class="gd-meta-dd"><span class="gd-mono">{{ active_key.fingerprint[:24].upper() if active_key else "—" }}...</span></div>
+
+        <div class="gd-meta-dt">Stored Ciphertext</div>
+        <div class="gd-meta-dd"><span class="gd-mono">{{ file.stored_filename }}</span></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Right Column: Key Version History & Security Activity -->
+  <div>
+
+    <!-- Key Version History Card -->
+    <section class="gd-card">
+      <div class="gd-card-header">
+        <h2 class="gd-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 14 14"></polyline>
+          </svg>
+          Key Version History
+        </h2>
+        <span style="font-size: 12px; color: var(--gd-text-muted);">{{ keys|length }} versions</span>
+      </div>
+
+      <div class="gd-table-container">
+        <table class="gd-file-table" style="font-size: 12.5px;">
+          <thead>
+            <tr>
+              <th>Ver</th>
+              <th>Status</th>
+              <th>Fingerprint</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for k in keys %}
+            <tr>
+              <td><strong>v{{ k.version }}</strong></td>
+              <td>
+                {% if k.status == "ACTIVE" %}
+                <span class="gd-pill gd-pill-low">ACTIVE</span>
+                {% else %}
+                <span class="gd-pill gd-pill-action" style="color: var(--gd-text-muted);">INACTIVE</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="gd-mono">{{ k.fingerprint[:12].upper() if k.fingerprint else "—" }}...</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Audit Log Activity Card -->
+    <section class="gd-card">
+      <div class="gd-card-header">
+        <h2 class="gd-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          Security Audit Trail
+        </h2>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% for log in audit_logs %}
+        <div style="padding: 10px 12px; background-color: var(--gd-surface-variant); border-radius: var(--radius-sm); border: 1px solid var(--gd-border-subtle); font-size: 12.5px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span class="gd-pill {% if log.action in ['KEY_ROTATION', 'RE_ENCRYPTION'] %}gd-pill-version{% elif log.action == 'RISK_ANALYSIS' %}gd-pill-action{% else %}gd-pill-action{% endif %}">
+              {{ log.action }}
+            </span>
+            <span style="font-size: 11px; color: var(--gd-text-muted);">{{ log.created_at.strftime("%H:%M:%S") }}</span>
+          </div>
+          <div style="color: var(--gd-text); word-break: normal; overflow-wrap: break-word; font-size: 12.5px; line-height: 1.45; margin-top: 4px;">
+            {{ log.details or "" }}
+          </div>
+          {% if log.risk_score is not none %}
+          <div style="font-size: 11px; color: var(--gd-text-muted); margin-top: 4px;">
+            Risk Score: <strong>{{ "%.0f"|format(log.risk_score) }}</strong>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+  </div>
+
 </div>
 
-{% if engine_status.is_ml and feature_importances %}
-<section class="card">
-  <h2>Model Insights <span class="pill pill-ml">Random Forest</span></h2>
-  <p class="muted">
-    Trained on {{ model_info.n_samples }} samples &middot; MAE {{ model_info.mae
-    }} risk points &middot; R&sup2; {{ model_info.r2 }}
-  </p>
-  <table class="breakdown-table">
-    {% for name, importance in feature_importances %}
-    <tr>
-      <td>{{ name }}</td>
-      <td>
-        <div class="importance-bar-track">
-          <div
-            class="importance-bar-fill"
-            style="width: {{ (importance * 100)|round(1) }}%;"
-          ></div>
-        </div>
-      </td>
-      <td>{{ (importance * 100)|round(1) }}%</td>
-    </tr>
-    {% endfor %}
-  </table>
-</section>
-{% endif %}
-
-<!-- Rotation -->
-<section class="card">
-  <h2>Key Rotation</h2>
-  <p class="muted">
-    Rotation runs automatically when risk exceeds the threshold. You can also
-    force a rotation for demo purposes.
-  </p>
-  <form method="post" action="/file/{{ file.id }}/rotate">
-    <button type="submit" class="btn btn-primary">
-      Analyze &amp; Rotate If Needed
-    </button>
-    <button type="submit" name="force" value="true" class="btn btn-outline">
-      Force Rotate Now
-    </button>
-  </form>
-
-  <h3>Key Version History</h3>
-  <div class="table-responsive">
-    <table class="key-history-table">
-      <thead>
-        <th>Version</th>
-        <th>Status</th>
-        <th>Key Fingerprint</th>
-        <th>Created</th>
-      </thead>
-      <tbody>
-        {% for k in keys %}
-        <tr>
-          <td>v{{ k.version }}</td>
-          <td>
-            {% if k.status == "ACTIVE" %}
-            <span class="pill pill-encrypted">ACTIVE</span>
-            {% else %}
-            <span class="pill pill-inactive">INACTIVE</span>
-            {% endif %}
-          </td>
-          <td class="mono">
-            {{ k.fingerprint[:16].upper() if k.fingerprint else "—" }}...
-          </td>
-          <td>{{ k.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Audit Log -->
-<section class="card">
-  <h2>Audit Log</h2>
-  <div class="table-responsive">
-    <table class="audit-table">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Action</th>
-          <th>Old</th>
-          <th>New</th>
-          <th>Risk</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in audit_logs %}
-        <tr>
-          <td>{{ log.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-          <td><span class="pill pill-action">{{ log.action }}</span></td>
-          <td>{{ "v"+log.old_version|string if log.old_version else "—" }}</td>
-          <td>{{ "v"+log.new_version|string if log.new_version else "—" }}</td>
-          <td>
-            {{ "%.0f"|format(log.risk_score) if log.risk_score is not none else
-            "—" }}
-          </td>
-          <td class="muted" style="word-break: break-all">
-            {{ log.details or "" }}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
+<!-- Live synchronization: Polls read-only file status so background scheduler key rotation reflects automatically -->
 <script>
-  // Live synchronization: Polls read-only file status so the UI automatically
-  // reflects background scheduler key rotation without requiring manual browser refresh.
   const currentKeyVersion = {{ file.active_key_version }};
   const fileId = {{ file.id }};
   let isChecking = false;
@@ -284,12 +368,10 @@ endblock %} {% block content %}
       if (res.ok) {
         const data = await res.json();
         if (data.active_key_version && data.active_key_version !== currentKeyVersion) {
-          // Active key version updated by background scheduler!
           window.location.reload();
         }
       }
     } catch (e) {
-      // Silent catch for background polling
     } finally {
       isChecking = false;
     }

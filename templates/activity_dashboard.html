@@ -1,56 +1,80 @@
 {% extends "base.html" %}
-{% block title %}Activity Dashboard{% endblock %}
+{% block title %}Security Activity{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Security Activity Dashboard</h1>
+
+<!-- Breadcrumb -->
+<div class="gd-breadcrumb">
+  <a href="/dashboard">My Drive</a>
+  <span>&rsaquo;</span>
+  <span style="color: var(--gd-text); font-weight: 500;">Security Activity</span>
 </div>
 
-<div class="card">
-  <h2>Global Audit Trail</h2>
-  <p class="muted">Recent security events, including logins, uploads, and automated key rotations.</p>
-  
-  {% if not logs %}
-  <div class="empty-state">
-    <p>No activity recorded yet.</p>
+<div class="gd-view-header">
+  <div>
+    <h1 class="gd-view-title">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gd-primary);">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+      </svg>
+      Security Activity &amp; Audit Trail
+    </h1>
+    <p class="gd-view-subtitle">Chronological ledger of logins, key rotations, re-encryptions, and ML risk scans</p>
   </div>
-  {% else %}
-  <div class="table-responsive">
-    <table class="audit-table">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Action</th>
-          <th>File</th>
-          <th>Risk</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in logs %}
-        <tr>
-          <td>{{ log.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-          <td>
-            <span class="pill 
-              {% if log.action in ['FAILED_LOGIN', 'KEY_ROTATION'] %}pill-high
-              {% elif log.action == 'LOGIN' %}pill-low
-              {% else %}pill-action{% endif %}">
-              {{ log.action }}
-            </span>
-          </td>
-          <td>
-            {% if log.file %}
-              <a href="/file/{{ log.file_id }}" style="color: var(--accent); text-decoration: none;">{{ log.file.original_filename }}</a>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td>{{ "%.0f"|format(log.risk_score) if log.risk_score is not none else "—" }}</td>
-          <td class="muted" style="word-break: break-all;">{{ log.details or "" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
 </div>
+
+{% if not logs %}
+<div class="gd-empty-state">
+  <div class="gd-empty-icon">&#128339;</div>
+  <div class="gd-empty-text">No security activity logged yet.</div>
+</div>
+{% else %}
+<div class="gd-table-container" style="overflow-x: auto;">
+  <table class="gd-file-table gd-activity-table" style="min-width: 900px;">
+    <thead>
+      <tr>
+        <th style="width: 170px; min-width: 165px; white-space: nowrap;">Timestamp</th>
+        <th style="width: 160px; min-width: 150px; white-space: nowrap;">Event Action</th>
+        <th style="width: 220px; min-width: 180px; max-width: 260px;">File Asset</th>
+        <th style="width: 105px; min-width: 95px; text-align: center; white-space: nowrap;">Risk Score</th>
+        <th style="min-width: 380px; width: 50%;">Audit Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td style="color: var(--gd-text-muted); font-size: 13px; white-space: nowrap;">
+          {{ log.created_at.strftime("%Y-%m-%d %H:%M:%S") }}
+        </td>
+        <td style="white-space: nowrap;">
+          <span class="gd-pill 
+            {% if log.action in ['KEY_ROTATION', 'RE_ENCRYPTION'] %}gd-pill-version
+            {% elif log.action == 'FAILED_LOGIN' %}gd-pill-high
+            {% elif log.action == 'LOGIN' %}gd-pill-low
+            {% else %}gd-pill-action{% endif %}">
+            {{ log.action }}
+          </span>
+        </td>
+        <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          {% if log.file %}
+          <a href="/file/{{ log.file_id }}" class="gd-file-name-link" title="{{ log.file.original_filename }}">{{ log.file.original_filename }}</a>
+          {% else %}
+          <span style="color: var(--gd-text-muted);">&mdash;</span>
+          {% endif %}
+        </td>
+        <td style="text-align: center; white-space: nowrap;">
+          {% if log.risk_score is not none %}
+          <strong>{{ "%.0f"|format(log.risk_score) }}</strong> <span style="font-size: 11px; color: var(--gd-text-muted);">/ 100</span>
+          {% else %}
+          <span style="color: var(--gd-text-muted);">&mdash;</span>
+          {% endif %}
+        </td>
+        <td style="color: var(--gd-text); font-size: 13.5px; line-height: 1.55; overflow-wrap: break-word; word-break: normal; padding-right: 24px;">
+          {{ log.details or "" }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% endblock %}

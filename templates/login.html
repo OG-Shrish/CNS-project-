@@ -1,16 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Login{% endblock %}
+{% block title %}Sign In{% endblock %}
 {% block content %}
-<div class="auth-card">
-  <h1>Login</h1>
-  {% if error %}<p class="error-msg">{{ error }}</p>{% endif %}
-  <form method="post" action="/login">
-    <label>Username</label>
-    <input type="text" name="username" required autofocus>
-    <label>Password</label>
-    <input type="password" name="password" required>
-    <button type="submit" class="btn btn-primary">Login</button>
-  </form>
-  <p class="auth-switch">No account? <a href="/register">Register</a></p>
+
+<div class="gd-auth-wrapper">
+  <div class="gd-auth-card">
+    <div class="gd-auth-logo">
+      <div class="gd-logo-icon" style="width: 48px; height: 48px; font-size: 24px;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M12 8v4"/>
+          <path d="M12 16h.01"/>
+        </svg>
+      </div>
+    </div>
+    
+    <h1 class="gd-auth-title">Sign in</h1>
+    <p class="gd-auth-subtitle">to continue to Security Drive</p>
+
+    {% if error %}
+    <div class="gd-error-alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <div class="gd-form-group">
+        <label class="gd-label">Username</label>
+        <input type="text" name="username" class="gd-input" placeholder="Enter username" required autofocus>
+      </div>
+
+      <div class="gd-form-group">
+        <label class="gd-label">Password</label>
+        <input type="password" name="password" class="gd-input" placeholder="Enter password" required>
+      </div>
+
+      <div class="gd-auth-footer">
+        <a href="/register" class="gd-auth-switch">Create account</a>
+        <button type="submit" class="gd-btn gd-btn-primary" style="padding: 10px 28px;">
+          Next
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
+
 {% endblock %}
